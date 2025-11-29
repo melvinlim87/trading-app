@@ -1,0 +1,289 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// Enums replaced with String for SQLite compatibility
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String    @map("password_hash")
+  name          String
+  role          String    @default("USER")
+  avatarUrl     String?   @map("avatar_url")
+  country       String?
+  bio           String?
+  tradingStyle  String?   @map("trading_style")
+  isActive      Boolean   @default(true) @map("is_active")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  accounts      Account[]
+  posts         Post[]
+  comments      Comment[]
+  reactions     Reaction[]
+  following     Follow[]  @relation("UserFollowing")
+  followers     Follow[]  @relation("UserFollowers")
+  roomMemberships RoomMembership[]
+  notifications Notification[]
+  badges        UserBadge[]
+
+  @@map("users")
+}
+
+model Account {
+  id            String      @id @default(uuid())
+  userId        String      @map("user_id")
+  type          String
+  currency      String      @default("USD")
+  equity        Float       @default(0)
+  cash          Float       @default(0)
+  marginUsed    Float       @default(0) @map("margin_used")
+  settingsJson  String?     @map("settings_json")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders        Order[]
+  positions     Position[]
+  pnlSnapshots  PnlSnapshot[]
+
+  @@map("accounts")
+}
+
+model Instrument {
+  id            String          @id @default(uuid())
+  symbol        String
+  name          String
+  type          String
+  exchange      String
+  currency      String          @default("USD")
+  metaJson      String?         @map("meta_json")
+  
+  // For options
+  underlyingSymbol String?      @map("underlying_symbol")
+  optionType    String?         @map("option_type")
+  strikePrice   Float?          @map("strike_price")
+  expiryDate    DateTime?       @map("expiry_date")
+  
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+
+  orders        Order[]
+  positions     Position[]
+  posts         PostInstrument[]
+
+  @@unique([symbol, type, strikePrice, expiryDate, optionType])
+  @@map("instruments")
+}
+
+model Order {
+  id            String      @id @default(uuid())
+  accountId     String      @map("account_id")
+  instrumentId  String      @map("instrument_id")
+  side          String
+  type          String
+  quantity      Float
+  price         Float?
+  stopPrice     Float?      @map("stop_price")
+  filledQty     Float       @default(0) @map("filled_qty")
+  avgFillPrice  Float?      @map("avg_fill_price")
+  status        String      @default("PENDING")
+  timeInForce   String      @default("DAY") @map("time_in_force")
+  metaJson      String?     @map("meta_json")
+  placedAt      DateTime    @default(now()) @map("placed_at")
+  filledAt      DateTime?   @map("filled_at")
+  cancelledAt   DateTime?   @map("cancelled_at")
+
+  account       Account     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  instrument    Instrument  @relation(fields: [instrumentId], references: [id])
+
+  @@map("orders")
+}
+
+model Position {
+  id              String      @id @default(uuid())
+  accountId       String      @map("account_id")
+  instrumentId    String      @map("instrument_id")
+  quantity        Float
+  avgPrice        Float       @map("avg_price")
+  realizedPnl     Float       @default(0) @map("realized_pnl")
+  unrealizedPnl   Float       @default(0) @map("unrealized_pnl")
+  metaJson        String?     @map("meta_json")
+  openedAt        DateTime    @default(now()) @map("opened_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+
+  account         Account     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  instrument      Instrument  @relation(fields: [instrumentId], references: [id])
+
+  @@unique([accountId, instrumentId])
+  @@map("positions")
+}
+
+model PnlSnapshot {
+  id            String      @id @default(uuid())
+  accountId     String      @map("account_id")
+  date          DateTime
+  equity        Float
+  cash          Float
+  realizedPnl   Float       @map("realized_pnl")
+  unrealizedPnl Float       @map("unrealized_pnl")
+  totalPnl      Float       @map("total_pnl")
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  account       Account     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, date])
+  @@map("pnl_snapshots")
+}
+
+model Post {
+  id            String      @id @default(uuid())
+  userId        String      @map("user_id")
+  text          String
+  attachments   String      @default("[]")
+  isPublic      Boolean     @default(true) @map("is_public")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  instruments   PostInstrument[]
+  comments      Comment[]
+  reactions     Reaction[]
+
+  @@map("posts")
+}
+
+model PostInstrument {
+  id            String      @id @default(uuid())
+  postId        String      @map("post_id")
+  instrumentId  String      @map("instrument_id")
+
+  post          Post        @relation(fields: [postId], references: [id], onDelete: Cascade)
+  instrument    Instrument  @relation(fields: [instrumentId], references: [id])
+
+  @@unique([postId, instrumentId])
+  @@map("post_instruments")
+}
+
+model Comment {
+  id            String      @id @default(uuid())
+  postId        String      @map("post_id")
+  userId        String      @map("user_id")
+  text          String
+  parentId      String?     @map("parent_id")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  post          Post        @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent        Comment?    @relation("CommentReplies", fields: [parentId], references: [id])
+  replies       Comment[]   @relation("CommentReplies")
+
+  @@map("comments")
+}
+
+model Reaction {
+  id            String      @id @default(uuid())
+  postId        String      @map("post_id")
+  userId        String      @map("user_id")
+  type          String      // like, rocket, question, etc.
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  post          Post        @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId, type])
+  @@map("reactions")
+}
+
+model Follow {
+  id            String      @id @default(uuid())
+  followerId    String      @map("follower_id")
+  followingId   String      @map("following_id")
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  follower      User        @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  following     User        @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@map("follows")
+}
+
+model Room {
+  id            String      @id @default(uuid())
+  name          String
+  description   String?
+  theme         String?
+  avatarUrl     String?     @map("avatar_url")
+  isPublic      Boolean     @default(true) @map("is_public")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  members       RoomMembership[]
+
+  @@map("rooms")
+}
+
+model RoomMembership {
+  id            String      @id @default(uuid())
+  roomId        String      @map("room_id")
+  userId        String      @map("user_id")
+  role          String      @default("MEMBER") // ADMIN, MODERATOR, MEMBER
+  joinedAt      DateTime    @default(now()) @map("joined_at")
+
+  room          Room        @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, userId])
+  @@map("room_memberships")
+}
+
+model Badge {
+  id            String      @id @default(uuid())
+  name          String      @unique
+  description   String?
+  iconUrl       String?     @map("icon_url")
+  criteria      String?     // Criteria for earning the badge
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  users         UserBadge[]
+
+  @@map("badges")
+}
+
+model UserBadge {
+  id            String      @id @default(uuid())
+  userId        String      @map("user_id")
+  badgeId       String      @map("badge_id")
+  earnedAt      DateTime    @default(now()) @map("earned_at")
+
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge         Badge       @relation(fields: [badgeId], references: [id])
+
+  @@unique([userId, badgeId])
+  @@map("user_badges")
+}
+
+model Notification {
+  id            String      @id @default(uuid())
+  userId        String      @map("user_id")
+  type          String      // order_filled, margin_call, new_follower, etc.
+  title         String
+  message       String
+  data          String?
+  isRead        Boolean     @default(false) @map("is_read")
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
