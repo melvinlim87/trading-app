@@ -8,10 +8,11 @@ import { useAuthStore } from '@/store/auth-store';
 export default function MarketsPage() {
   const router = useRouter();
   const { isAuthenticated } = useAuthStore();
-  const [selectedSymbol, setSelectedSymbol] = useState('AAPL');
+  const [assetType, setAssetType] = useState<'stocks' | 'crypto'>('crypto');
+  const [selectedSymbol, setSelectedSymbol] = useState('BTC/USD');
   const [orderType, setOrderType] = useState<'market' | 'limit'>('market');
   const [side, setSide] = useState<'buy' | 'sell'>('buy');
-  const [quantity, setQuantity] = useState('100');
+  const [quantity, setQuantity] = useState('1');
   const [limitPrice, setLimitPrice] = useState('');
 
   if (!isAuthenticated) {
@@ -28,8 +29,25 @@ export default function MarketsPage() {
     { symbol: 'NVDA', name: 'NVIDIA', price: 495.20, change: 5.5 },
   ];
 
+  const cryptoPairs = [
+    { symbol: 'BTC/USD', name: 'Bitcoin', price: 43250.00, change: 3.8 },
+    { symbol: 'ETH/USD', name: 'Ethereum', price: 2280.50, change: 5.2 },
+    { symbol: 'SOL/USD', name: 'Solana', price: 98.75, change: 8.5 },
+    { symbol: 'BNB/USD', name: 'Binance Coin', price: 312.40, change: 2.1 },
+    { symbol: 'XRP/USD', name: 'Ripple', price: 0.62, change: -1.5 },
+    { symbol: 'ADA/USD', name: 'Cardano', price: 0.58, change: 4.3 },
+    { symbol: 'DOGE/USD', name: 'Dogecoin', price: 0.085, change: -2.1 },
+    { symbol: 'MATIC/USD', name: 'Polygon', price: 0.92, change: 6.7 },
+  ];
+
+  const assets = assetType === 'crypto' ? cryptoPairs : popularStocks;
+
+  const selectedAsset = assets.find(a => a.symbol === selectedSymbol);
+  const currentPrice = selectedAsset?.price || 0;
+
   const handlePlaceOrder = () => {
-    alert(`Order placed: ${side.toUpperCase()} ${quantity} shares of ${selectedSymbol} at ${orderType === 'market' ? 'market price' : `$${limitPrice}`}`);
+    const unit = assetType === 'crypto' ? 'units' : 'shares';
+    alert(`Order placed: ${side.toUpperCase()} ${quantity} ${unit} of ${selectedSymbol} at ${orderType === 'market' ? 'market price' : `$${limitPrice}`}`);
   };
 
   return (
@@ -50,12 +68,45 @@ export default function MarketsPage() {
 
       <div className="container mx-auto px-4 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left: Stock List */}
+          {/* Left: Asset List */}
           <div className="lg:col-span-1">
             <div className="bg-card rounded-lg p-4 border border-border">
-              <h2 className="text-lg font-semibold mb-4">Popular Stocks</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold">Markets</h2>
+              </div>
+              
+              {/* Asset Type Toggle */}
+              <div className="flex space-x-2 mb-4">
+                <button
+                  onClick={() => {
+                    setAssetType('crypto');
+                    setSelectedSymbol('BTC/USD');
+                  }}
+                  className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
+                    assetType === 'crypto'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-secondary hover:bg-secondary/80'
+                  }`}
+                >
+                  🪙 Crypto
+                </button>
+                <button
+                  onClick={() => {
+                    setAssetType('stocks');
+                    setSelectedSymbol('AAPL');
+                  }}
+                  className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
+                    assetType === 'stocks'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-secondary hover:bg-secondary/80'
+                  }`}
+                >
+                  📈 Stocks
+                </button>
+              </div>
+
               <div className="space-y-2">
-                {popularStocks.map((stock) => (
+                {assets.map((stock) => (
                   <button
                     key={stock.symbol}
                     onClick={() => setSelectedSymbol(stock.symbol)}
@@ -191,13 +242,17 @@ export default function MarketsPage() {
                     <span className="font-semibold">${limitPrice || '0.00'}</span>
                   </div>
                 )}
+                <div className="flex justify-between mb-2">
+                  <span className="text-sm text-muted-foreground">Current Price</span>
+                  <span className="font-semibold">${currentPrice.toLocaleString()}</span>
+                </div>
                 <div className="border-t border-border pt-2 mt-2">
                   <div className="flex justify-between">
                     <span className="font-semibold">Est. Total</span>
                     <span className="font-bold text-lg">
                       ${orderType === 'market' 
-                        ? (parseFloat(quantity || '0') * 178.50).toFixed(2)
-                        : (parseFloat(quantity || '0') * parseFloat(limitPrice || '0')).toFixed(2)
+                        ? (parseFloat(quantity || '0') * currentPrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                        : (parseFloat(quantity || '0') * parseFloat(limitPrice || '0')).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                       }
                     </span>
                   </div>
