@@ -77,7 +77,9 @@ export default function DashboardPage() {
                 <div className="font-semibold">Create Paper Account</div>
                 <div className="text-sm opacity-90">Start with $100K virtual funds</div>
               </button>
-              <button className="w-full px-4 py-3 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/90 transition-colors text-left">
+              <button 
+                onClick={() => router.push('/markets')}
+                className="w-full px-4 py-3 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/90 transition-colors text-left">
                 <div className="font-semibold">Browse Markets</div>
                 <div className="text-sm opacity-90">Explore stocks and options</div>
               </button>
