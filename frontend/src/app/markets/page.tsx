@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import TradingChart from '@/components/TradingChart';
 import { useAuthStore } from '@/store/auth-store';
+import { fetchCryptoPrices, fetchStockPrices, MarketPrice } from '@/lib/market-data';
 
 export default function MarketsPage() {
   const router = useRouter();
@@ -14,33 +15,39 @@ export default function MarketsPage() {
   const [side, setSide] = useState<'buy' | 'sell'>('buy');
   const [quantity, setQuantity] = useState('1');
   const [limitPrice, setLimitPrice] = useState('');
+  const [assets, setAssets] = useState<MarketPrice[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch live market prices
+  useEffect(() => {
+    const loadPrices = async () => {
+      setLoading(true);
+      try {
+        if (assetType === 'crypto') {
+          const prices = await fetchCryptoPrices();
+          setAssets(prices);
+        } else {
+          const prices = await fetchStockPrices();
+          setAssets(prices);
+        }
+      } catch (error) {
+        console.error('Error loading prices:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadPrices();
+    
+    // Refresh prices every 30 seconds
+    const interval = setInterval(loadPrices, 30000);
+    return () => clearInterval(interval);
+  }, [assetType]);
 
   if (!isAuthenticated) {
     router.push('/auth/login');
     return null;
   }
-
-  const popularStocks = [
-    { symbol: 'AAPL', name: 'Apple Inc.', price: 178.50, change: 2.5 },
-    { symbol: 'MSFT', name: 'Microsoft', price: 378.90, change: 1.8 },
-    { symbol: 'GOOGL', name: 'Alphabet', price: 140.25, change: -0.5 },
-    { symbol: 'AMZN', name: 'Amazon', price: 155.75, change: 3.2 },
-    { symbol: 'TSLA', name: 'Tesla', price: 242.80, change: -1.2 },
-    { symbol: 'NVDA', name: 'NVIDIA', price: 495.20, change: 5.5 },
-  ];
-
-  const cryptoPairs = [
-    { symbol: 'BTC/USD', name: 'Bitcoin', price: 43250.00, change: 3.8 },
-    { symbol: 'ETH/USD', name: 'Ethereum', price: 2280.50, change: 5.2 },
-    { symbol: 'SOL/USD', name: 'Solana', price: 98.75, change: 8.5 },
-    { symbol: 'BNB/USD', name: 'Binance Coin', price: 312.40, change: 2.1 },
-    { symbol: 'XRP/USD', name: 'Ripple', price: 0.62, change: -1.5 },
-    { symbol: 'ADA/USD', name: 'Cardano', price: 0.58, change: 4.3 },
-    { symbol: 'DOGE/USD', name: 'Dogecoin', price: 0.085, change: -2.1 },
-    { symbol: 'MATIC/USD', name: 'Polygon', price: 0.92, change: 6.7 },
-  ];
-
-  const assets = assetType === 'crypto' ? cryptoPairs : popularStocks;
 
   const selectedAsset = assets.find(a => a.symbol === selectedSymbol);
   const currentPrice = selectedAsset?.price || 0;
@@ -106,30 +113,37 @@ export default function MarketsPage() {
               </div>
 
               <div className="space-y-2">
-                {assets.map((stock) => (
-                  <button
-                    key={stock.symbol}
-                    onClick={() => setSelectedSymbol(stock.symbol)}
-                    className={`w-full p-3 rounded-lg text-left transition-colors ${
-                      selectedSymbol === stock.symbol
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-secondary hover:bg-secondary/80'
-                    }`}
-                  >
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <div className="font-semibold">{stock.symbol}</div>
-                        <div className="text-sm opacity-80">{stock.name}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-semibold">${stock.price}</div>
-                        <div className={`text-sm ${stock.change >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                          {stock.change >= 0 ? '+' : ''}{stock.change}%
+                {loading ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                    <p className="text-sm text-muted-foreground mt-2">Loading prices...</p>
+                  </div>
+                ) : (
+                  assets.map((stock) => (
+                    <button
+                      key={stock.symbol}
+                      onClick={() => setSelectedSymbol(stock.symbol)}
+                      className={`w-full p-3 rounded-lg text-left transition-colors ${
+                        selectedSymbol === stock.symbol
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-secondary hover:bg-secondary/80'
+                      }`}
+                    >
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <div className="font-semibold">{stock.symbol}</div>
+                          <div className="text-sm opacity-80">{stock.name}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-semibold">${stock.price.toLocaleString()}</div>
+                          <div className={`text-sm ${stock.change24h >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                            {stock.change24h >= 0 ? '+' : ''}{stock.change24h.toFixed(2)}%
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </button>
-                ))}
+                    </button>
+                  ))
+                )}
               </div>
             </div>
           </div>
@@ -137,7 +151,7 @@ export default function MarketsPage() {
           {/* Middle: Chart */}
           <div className="lg:col-span-2 space-y-6">
             <div className="bg-card rounded-lg p-6 border border-border">
-              <TradingChart symbol={selectedSymbol} />
+              <TradingChart symbol={selectedSymbol} assetType={assetType} />
             </div>
 
             {/* Trading Panel */}

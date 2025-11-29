@@ -1,27 +1,51 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createChart, ColorType, IChartApi, ISeriesApi } from 'lightweight-charts';
+import { fetchCryptoHistory, fetchStockHistory, timeframeToDays, CandleData } from '@/lib/market-data';
 
 interface TradingChartProps {
   symbol: string;
-  data?: Array<{
-    time: string;
-    open: number;
-    high: number;
-    low: number;
-    close: number;
-    volume?: number;
-  }>;
+  assetType?: 'crypto' | 'stocks';
+  data?: CandleData[];
 }
 
-export default function TradingChart({ symbol, data }: TradingChartProps) {
+export default function TradingChart({ symbol, assetType = 'crypto', data }: TradingChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const [timeframe, setTimeframe] = useState('1M');
+  const [chartData, setChartData] = useState<CandleData[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch real market data
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const days = timeframeToDays(timeframe);
+        let historicalData: CandleData[];
+        
+        if (assetType === 'crypto') {
+          historicalData = await fetchCryptoHistory(symbol, days);
+        } else {
+          const interval = days <= 7 ? 'daily' : days <= 90 ? 'daily' : 'weekly';
+          historicalData = await fetchStockHistory(symbol, interval);
+        }
+        
+        setChartData(historicalData);
+      } catch (error) {
+        console.error('Error loading chart data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadData();
+  }, [symbol, timeframe, assetType]);
 
   useEffect(() => {
-    if (!chartContainerRef.current) return;
+    if (!chartContainerRef.current || chartData.length === 0) return;
 
     // Create chart
     const chart = createChart(chartContainerRef.current, {
@@ -54,8 +78,7 @@ export default function TradingChart({ symbol, data }: TradingChartProps) {
 
     candlestickSeriesRef.current = candlestickSeries;
 
-    // Generate sample data if none provided
-    const chartData = data || generateSampleData();
+    // Use fetched data
     candlestickSeries.setData(chartData as any);
 
     // Fit content
@@ -76,49 +99,34 @@ export default function TradingChart({ symbol, data }: TradingChartProps) {
       window.removeEventListener('resize', handleResize);
       chart.remove();
     };
-  }, [data]);
+  }, [chartData]);
+
+  const timeframes = ['1D', '1W', '1M', '3M', '6M', '1Y', 'ALL'];
 
   return (
     <div className="w-full">
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-lg font-semibold">{symbol}</h3>
+        <div>
+          <h3 className="text-lg font-semibold">{symbol}</h3>
+          {loading && <p className="text-xs text-muted-foreground">Loading data...</p>}
+        </div>
         <div className="flex space-x-2">
-          <button className="px-3 py-1 text-sm bg-secondary rounded hover:bg-secondary/80">1D</button>
-          <button className="px-3 py-1 text-sm bg-secondary rounded hover:bg-secondary/80">1W</button>
-          <button className="px-3 py-1 text-sm bg-secondary rounded hover:bg-secondary/80">1M</button>
-          <button className="px-3 py-1 text-sm bg-secondary rounded hover:bg-secondary/80">1Y</button>
+          {timeframes.map((tf) => (
+            <button
+              key={tf}
+              onClick={() => setTimeframe(tf)}
+              className={`px-3 py-1 text-sm rounded transition-colors ${
+                timeframe === tf
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-secondary hover:bg-secondary/80'
+              }`}
+            >
+              {tf}
+            </button>
+          ))}
         </div>
       </div>
       <div ref={chartContainerRef} className="rounded-lg overflow-hidden border border-border" />
     </div>
   );
-}
-
-// Generate sample candlestick data
-function generateSampleData() {
-  const data = [];
-  const basePrice = 150;
-  let currentPrice = basePrice;
-  const now = new Date();
-
-  for (let i = 100; i >= 0; i--) {
-    const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-    const open = currentPrice;
-    const change = (Math.random() - 0.5) * 5;
-    const close = open + change;
-    const high = Math.max(open, close) + Math.random() * 2;
-    const low = Math.min(open, close) - Math.random() * 2;
-
-    data.push({
-      time: date.toISOString().split('T')[0],
-      open: parseFloat(open.toFixed(2)),
-      high: parseFloat(high.toFixed(2)),
-      low: parseFloat(low.toFixed(2)),
-      close: parseFloat(close.toFixed(2)),
-    });
-
-    currentPrice = close;
-  }
-
-  return data;
 }
